@@ -1,0 +1,14 @@
+name: RefontCrafts
+version: '1.0'
+main: ru.refontstudio.refontcrafts.RefontCrafts
+api-version: '1.21'
+commands:
+  rcrafts:
+    aliases: [rc, refontcrafts]
+    description: RefontCrafts commands
+    permission: refontcrafts.use
+permissions:
+  refontcrafts.use:
+    default: true
+  refontcrafts.admin:
+    default: op
