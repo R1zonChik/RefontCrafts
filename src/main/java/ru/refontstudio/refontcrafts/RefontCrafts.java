@@ -3,9 +3,11 @@ package ru.refontstudio.refontcrafts;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import ru.refontstudio.refontcrafts.commands.RefontCraftsCommand;
+import ru.refontstudio.refontcrafts.db.Database;
 import ru.refontstudio.refontcrafts.gui.AnvilEditorMenu;
 import ru.refontstudio.refontcrafts.gui.RecipeEditorMenu;
 import ru.refontstudio.refontcrafts.listeners.AnvilListener;
+import ru.refontstudio.refontcrafts.listeners.WorkbenchListener;
 import ru.refontstudio.refontcrafts.storage.RecipeStorage;
 import ru.refontstudio.refontcrafts.util.ChatLog;
 import ru.refontstudio.refontcrafts.util.ChatLogger;
@@ -15,11 +17,13 @@ import java.util.logging.Handler;
 
 public final class RefontCrafts extends JavaPlugin {
     private static RefontCrafts instance;
+    private Database database;
     private RecipeStorage storage;
     private RecipeEditorMenu recipeMenu;
     private AnvilEditorMenu anvilMenu;
 
     public static RefontCrafts getInstance() { return instance; }
+    public Database database() { return database; }
     public RecipeStorage storage() { return storage; }
     public RecipeEditorMenu recipeMenu() { return recipeMenu; }
     public AnvilEditorMenu anvilMenu() { return anvilMenu; }
@@ -33,15 +37,15 @@ public final class RefontCrafts extends JavaPlugin {
         for (Handler h : getLogger().getHandlers()) getLogger().removeHandler(h);
         getLogger().addHandler(new ChatLogger());
 
-        storage = new RecipeStorage(this);
-        storage.migrateLegacy();
-        storage.loadAndRegisterAll();
+        database = new Database(this);
+        storage = new RecipeStorage(this, database);
 
         recipeMenu = new RecipeEditorMenu(this, storage);
         anvilMenu = new AnvilEditorMenu(this, storage);
         Bukkit.getPluginManager().registerEvents(recipeMenu, this);
         Bukkit.getPluginManager().registerEvents(anvilMenu, this);
         Bukkit.getPluginManager().registerEvents(new AnvilListener(this, storage), this);
+        Bukkit.getPluginManager().registerEvents(new WorkbenchListener(this), this);
 
         RefontCraftsCommand cmd = new RefontCraftsCommand(this);
         if (getCommand("rcrafts") != null) {
@@ -49,12 +53,15 @@ public final class RefontCrafts extends JavaPlugin {
             getCommand("rcrafts").setTabCompleter(cmd);
         }
 
-        ChatLog.send(prefix() + "&aЗагружено рецептов: &f" + storage.shapelessCount() + " &7| Наковальня: &f" + storage.anvilCount());
+        storage.loadAllAsync(() -> ChatLog.send(prefix() + "&aЗагружено рецептов: &f" + storage.shapelessCount() + " &7| Наковальня: &f" + storage.anvilCount()));
     }
 
     @Override
     public void onDisable() {
-        if (storage != null) storage.unregisterAllShapeless();
+        if (storage != null) {
+            storage.shutdown();
+            storage.unregisterAllShapeless();
+        }
     }
 
     public String prefix() {
@@ -75,11 +82,19 @@ public final class RefontCrafts extends JavaPlugin {
     public boolean takeBackOnClose() {
         return getConfig().getBoolean("settings.take_back_on_close", true);
     }
+
+    public String msg(String key) {
+        return Text.color(getConfig().getString("messages." + key, ""));
+    }
+    public String msg(String key, String... ph) {
+        String s = getConfig().getString("messages." + key, "");
+        for (int i = 0; i + 1 < ph.length; i += 2) s = s.replace("%" + ph[i] + "%", ph[i + 1]);
+        return Text.color(s);
+    }
+
     public void reloadAll() {
         reloadConfig();
         storage.unregisterAllShapeless();
-        storage.migrateLegacy();
-        storage.loadAndRegisterAll();
-        ChatLog.send(prefix() + "&aКонфиг и рецепты перезагружены.");
+        storage.loadAllAsync(() -> {});
     }
 }

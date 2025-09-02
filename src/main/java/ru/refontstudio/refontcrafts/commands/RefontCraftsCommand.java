@@ -27,11 +27,11 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
         String sub = args[0].toLowerCase();
         if (sub.equals("recipe")) {
             if (!(s instanceof Player)) {
-                s.sendMessage(Text.color(plugin.prefix() + "&cТолько игрок."));
+                s.sendMessage(Text.color(plugin.prefix() + plugin.msg("only_player")));
                 return true;
             }
             if (!s.hasPermission("refontcrafts.admin")) {
-                s.sendMessage(Text.color(plugin.prefix() + "&cНедостаточно прав."));
+                s.sendMessage(Text.color(plugin.prefix() + plugin.msg("no_permission")));
                 return true;
             }
             plugin.recipeMenu().openEditor((Player) s);
@@ -39,11 +39,11 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
         }
         if (sub.equals("anvil")) {
             if (!(s instanceof Player)) {
-                s.sendMessage(Text.color(plugin.prefix() + "&cТолько игрок."));
+                s.sendMessage(Text.color(plugin.prefix() + plugin.msg("only_player")));
                 return true;
             }
             if (!s.hasPermission("refontcrafts.admin")) {
-                s.sendMessage(Text.color(plugin.prefix() + "&cНедостаточно прав."));
+                s.sendMessage(Text.color(plugin.prefix() + plugin.msg("no_permission")));
                 return true;
             }
             plugin.anvilMenu().openEditor((Player) s);
@@ -51,11 +51,11 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
         }
         if (sub.equals("reload")) {
             if (!s.hasPermission("refontcrafts.admin")) {
-                s.sendMessage(Text.color(plugin.prefix() + "&cНедостаточно прав."));
+                s.sendMessage(Text.color(plugin.prefix() + plugin.msg("no_permission")));
                 return true;
             }
             plugin.reloadAll();
-            s.sendMessage(Text.color(plugin.prefix() + "&aКонфиг и рецепты перезагружены."));
+            s.sendMessage(Text.color(plugin.prefix() + plugin.msg("reloaded")));
             return true;
         }
         s.sendMessage(Text.color(plugin.prefix() + "&7Неизвестно. &f/rc recipe &7| &f/rc anvil &7| &f/rc reload"));

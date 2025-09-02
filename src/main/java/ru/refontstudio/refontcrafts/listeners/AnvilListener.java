@@ -14,7 +14,8 @@ import ru.refontstudio.refontcrafts.RefontCrafts;
 import ru.refontstudio.refontcrafts.storage.RecipeStorage;
 import ru.refontstudio.refontcrafts.storage.RecipeStorage.AnvilRecipe;
 import ru.refontstudio.refontcrafts.util.ItemUtil;
-import ru.refontstudio.refontcrafts.util.Text;
+
+import java.util.Map;
 
 public class AnvilListener implements Listener {
     private final RefontCrafts plugin;
@@ -30,14 +31,30 @@ public class AnvilListener implements Listener {
         ItemStack a = e.getInventory().getItem(0);
         ItemStack b = e.getInventory().getItem(1);
         if (a == null || b == null || a.getType() == Material.AIR || b.getType() == Material.AIR) return;
+
         for (AnvilRecipe r : storage.getAnvilRecipes()) {
             boolean ok = plugin.exactMeta()
-                    ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a.getAmount())) && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b.getAmount()))
+                    ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a.getAmount()))
+                    && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b.getAmount()))
                     : ItemUtil.similarType(a, r.left) && ItemUtil.similarType(b, r.right);
             if (!ok) continue;
-            if (a.getAmount() < r.left.getAmount() || b.getAmount() < r.right.getAmount()) continue;
-            e.setResult(r.result.clone());
-            e.getInventory().setRepairCost(r.cost);
+
+            int needA = Math.max(1, r.left.getAmount());
+            int needB = Math.max(1, r.right.getAmount());
+            if (a.getAmount() < needA || b.getAmount() < needB) continue;
+
+            int setsPossible = Math.min(a.getAmount() / needA, b.getAmount() / needB);
+            if (setsPossible <= 0) continue;
+
+            ItemStack base = r.result.clone();
+            int perSet = Math.max(1, base.getAmount());
+            int maxStack = Math.max(1, base.getMaxStackSize());
+            int previewSets = Math.max(1, Math.min(setsPossible, Math.max(1, maxStack / perSet)));
+
+            ItemStack preview = base.clone();
+            preview.setAmount(perSet * previewSets);
+            e.setResult(preview);
+            e.getInventory().setRepairCost(Math.max(0, r.cost * previewSets));
             return;
         }
     }
@@ -47,56 +64,82 @@ public class AnvilListener implements Listener {
         if (e.getInventory().getType() != InventoryType.ANVIL) return;
         if (e.getRawSlot() != 2) return;
         if (!(e.getWhoClicked() instanceof Player)) return;
+
         AnvilInventory inv = (AnvilInventory) e.getInventory();
-        ItemStack result = inv.getItem(2);
-        if (result == null || result.getType() == Material.AIR) return;
+        ItemStack resultSlot = inv.getItem(2);
+        if (resultSlot == null || resultSlot.getType() == Material.AIR) return;
 
         ItemStack a = inv.getItem(0);
         ItemStack b = inv.getItem(1);
-        AnvilRecipe match = null;
+        if (a == null || b == null || a.getType() == Material.AIR || b.getType() == Material.AIR) return;
 
+        AnvilRecipe match = null;
         for (AnvilRecipe r : storage.getAnvilRecipes()) {
             boolean ok = plugin.exactMeta()
-                    ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a == null ? 1 : a.getAmount())) && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b == null ? 1 : b.getAmount()))
+                    ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a.getAmount()))
+                    && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b.getAmount()))
                     : ItemUtil.similarType(a, r.left) && ItemUtil.similarType(b, r.right);
             if (!ok) continue;
-            if (a == null || b == null) continue;
-            if (a.getAmount() < r.left.getAmount() || b.getAmount() < r.right.getAmount()) continue;
-            if (!result.isSimilar(r.result)) continue;
+            if (!resultSlot.isSimilar(r.result)) continue;
             match = r;
             break;
         }
-
         if (match == null) return;
 
         e.setCancelled(true);
         Player p = (Player) e.getWhoClicked();
-        int cost = inv.getRepairCost();
-        if (cost > 0 && p.getLevel() < cost) {
-            p.sendMessage(Text.color(plugin.prefix() + "&cНедостаточно уровней: нужно &f" + cost));
+
+        int needA = Math.max(1, match.left.getAmount());
+        int needB = Math.max(1, match.right.getAmount());
+        int haveA = a.getAmount();
+        int haveB = b.getAmount();
+        int setsByItems = Math.min(haveA / needA, haveB / needB);
+        if (setsByItems <= 0) return;
+
+        int perSet = Math.max(1, match.result.getAmount());
+        int setsByXP = match.cost > 0 ? (p.getLevel() / match.cost) : setsByItems;
+
+        int setsWanted;
+        if (e.getClick() == ClickType.SHIFT_LEFT || e.getClick() == ClickType.SHIFT_RIGHT) {
+            setsWanted = Math.min(setsByItems, setsByXP);
+        } else {
+            int previewSets = Math.max(1, resultSlot.getAmount() / perSet);
+            setsWanted = Math.min(previewSets, Math.min(setsByItems, setsByXP));
+        }
+        if (setsWanted <= 0) return;
+
+        int desiredItems = perSet * setsWanted;
+        ItemStack giveAll = match.result.clone();
+        giveAll.setAmount(desiredItems);
+
+        int acceptedItems = desiredItems;
+        Map<Integer, ItemStack> leftover = p.getInventory().addItem(giveAll);
+        if (!leftover.isEmpty()) {
+            int leftAmount = 0;
+            for (ItemStack it : leftover.values()) if (it != null) leftAmount += it.getAmount();
+            acceptedItems = Math.max(0, desiredItems - leftAmount);
+        }
+        int setsCrafted = acceptedItems / perSet;
+        if (setsCrafted <= 0) {
+            p.sendMessage(plugin.msg("no_inventory_space"));
             return;
         }
 
-        ItemStack give = result.clone();
-        if (e.getClick() == ClickType.SHIFT_LEFT || e.getClick() == ClickType.SHIFT_RIGHT) {
-            int can = p.getInventory().firstEmpty() == -1 ? 0 : 1;
-            if (can == 0) {
-                p.sendMessage(Text.color(plugin.prefix() + "&cНет места в инвентаре."));
-                return;
-            }
-        }
-        p.getInventory().addItem(give);
+        int spendA = setsCrafted * needA;
+        int spendB = setsCrafted * needB;
+        int spendXP = match.cost * setsCrafted;
 
         ItemStack a2 = a.clone();
         ItemStack b2 = b.clone();
-        a2.setAmount(a2.getAmount() - match.left.getAmount());
-        b2.setAmount(b2.getAmount() - match.right.getAmount());
+        a2.setAmount(a2.getAmount() - spendA);
+        b2.setAmount(b2.getAmount() - spendB);
         inv.setItem(0, a2.getAmount() <= 0 ? null : a2);
         inv.setItem(1, b2.getAmount() <= 0 ? null : b2);
-        inv.setRepairCost(match.cost);
-        inv.setItem(2, null);
 
-        if (cost > 0) p.setLevel(p.getLevel() - cost);
+        if (spendXP > 0) p.setLevel(Math.max(0, p.getLevel() - spendXP));
+
+        inv.setItem(2, null);
+        inv.setRepairCost(0);
         p.updateInventory();
     }
 }

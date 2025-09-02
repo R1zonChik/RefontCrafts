@@ -67,11 +67,11 @@ public class RecipeEditorMenu implements Listener {
             }
             ItemStack res = top.getItem(RES);
             if (res == null || res.getType() == Material.AIR || ing.isEmpty()) {
-                p.sendMessage(Text.color(plugin.prefix() + "&cЗаполни ингредиенты и результат."));
+                p.sendMessage(Text.color(plugin.prefix() + plugin.msg("recipe_fill_both")));
                 return;
             }
             String id = storage.saveShapelessRecipe(ing, res.clone());
-            p.sendMessage(Text.color(plugin.prefix() + "&aРецепт сохранён: &f" + id));
+            p.sendMessage(Text.color(plugin.prefix() + plugin.msg("saved_recipe", "id", id)));
 
             for (int s2 : ING) {
                 dropBack(p, top.getItem(s2));

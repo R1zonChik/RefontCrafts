@@ -84,12 +84,12 @@ public class AnvilEditorMenu implements Listener {
             ItemStack out = top.getItem(OUT);
             if (left == null || right == null || out == null
                     || left.getType() == Material.AIR || right.getType() == Material.AIR || out.getType() == Material.AIR) {
-                p.sendMessage(Text.color(plugin.prefix() + "&cЗаполни оба входа и результат."));
+                p.sendMessage(Text.color(plugin.prefix() + plugin.msg("anvil_fill_both")));
                 return;
             }
             int cost = costs.getOrDefault(p, plugin.defaultAnvilCost());
             String id = storage.saveAnvilRecipe(left.clone(), right.clone(), out.clone(), cost);
-            p.sendMessage(Text.color(plugin.prefix() + "&aСохранён рецепт наковальни: &f" + id + " &7(стоимость: &f" + cost + "&7)"));
+            p.sendMessage(Text.color(plugin.prefix() + plugin.msg("saved_anvil", "id", id, "cost", String.valueOf(cost))));
 
             dropBack(p, left);
             dropBack(p, right);
