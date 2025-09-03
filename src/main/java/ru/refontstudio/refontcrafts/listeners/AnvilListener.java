@@ -15,11 +15,14 @@ import ru.refontstudio.refontcrafts.storage.RecipeStorage;
 import ru.refontstudio.refontcrafts.storage.RecipeStorage.AnvilRecipe;
 import ru.refontstudio.refontcrafts.util.ItemUtil;
 
-import java.util.Map;
+import java.util.*;
 
 public class AnvilListener implements Listener {
     private final RefontCrafts plugin;
     private final RecipeStorage storage;
+
+    private final Map<Long, List<AnvilRecipe>> index = new HashMap<>();
+    private int indexedCount = -1;
 
     public AnvilListener(RefontCrafts plugin, RecipeStorage storage) {
         this.plugin = plugin;
@@ -32,7 +35,11 @@ public class AnvilListener implements Listener {
         ItemStack b = e.getInventory().getItem(1);
         if (a == null || b == null || a.getType() == Material.AIR || b.getType() == Material.AIR) return;
 
-        for (AnvilRecipe r : storage.getAnvilRecipes()) {
+        ensureIndex();
+        List<AnvilRecipe> candidates = index.getOrDefault(key(a.getType(), b.getType()), Collections.emptyList());
+        if (candidates.isEmpty()) return;
+
+        for (AnvilRecipe r : candidates) {
             boolean ok = plugin.exactMeta()
                     ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a.getAmount()))
                     && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b.getAmount()))
@@ -73,8 +80,12 @@ public class AnvilListener implements Listener {
         ItemStack b = inv.getItem(1);
         if (a == null || b == null || a.getType() == Material.AIR || b.getType() == Material.AIR) return;
 
+        ensureIndex();
+        List<AnvilRecipe> candidates = index.getOrDefault(key(a.getType(), b.getType()), Collections.emptyList());
+        if (candidates.isEmpty()) return;
+
         AnvilRecipe match = null;
-        for (AnvilRecipe r : storage.getAnvilRecipes()) {
+        for (AnvilRecipe r : candidates) {
             boolean ok = plugin.exactMeta()
                     ? ItemUtil.similarExact(a, ItemUtil.cloneWithAmount(r.left, a.getAmount()))
                     && ItemUtil.similarExact(b, ItemUtil.cloneWithAmount(r.right, b.getAmount()))
@@ -141,5 +152,20 @@ public class AnvilListener implements Listener {
         inv.setItem(2, null);
         inv.setRepairCost(0);
         p.updateInventory();
+    }
+
+    private void ensureIndex() {
+        int cur = storage.getAnvilRecipes().size();
+        if (cur == indexedCount) return;
+        index.clear();
+        for (AnvilRecipe r : storage.getAnvilRecipes()) {
+            long k = key(r.left.getType(), r.right.getType());
+            index.computeIfAbsent(k, x -> new ArrayList<>()).add(r);
+        }
+        indexedCount = cur;
+    }
+
+    private long key(Material left, Material right) {
+        return (((long) left.ordinal()) << 32) | (right.ordinal() & 0xffffffffL);
     }
 }

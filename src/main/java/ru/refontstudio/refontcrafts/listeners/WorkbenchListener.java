@@ -17,9 +17,11 @@ import ru.refontstudio.refontcrafts.RefontCrafts;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WorkbenchListener implements Listener {
     private final RefontCrafts plugin;
+    private final Map<NamespacedKey, List<ItemStack>> reqCache = new ConcurrentHashMap<>();
 
     public WorkbenchListener(RefontCrafts plugin) {
         this.plugin = plugin;
@@ -38,7 +40,7 @@ public class WorkbenchListener implements Listener {
         ItemStack[] matrix = inv.getMatrix();
         if (matrix == null || matrix.length == 0) return;
 
-        List<ItemStack> req = extractRequirements(sr);
+        List<ItemStack> req = getRequirementsCached(sr);
         if (req.isEmpty()) return;
 
         int possible = computeSetsPossible(req, matrix, plugin.exactMeta());
@@ -70,7 +72,7 @@ public class WorkbenchListener implements Listener {
         ItemStack[] matrix = inv.getMatrix();
         if (matrix == null || matrix.length == 0) return;
 
-        List<ItemStack> req = extractRequirements(sr);
+        List<ItemStack> req = getRequirementsCached(sr);
         if (req.isEmpty()) return;
 
         int possible = computeSetsPossible(req, matrix, plugin.exactMeta());
@@ -132,7 +134,7 @@ public class WorkbenchListener implements Listener {
             }
         } else {
             ItemStack cursor = p.getItemOnCursor();
-            int canOnCursor = 0;
+            int canOnCursor;
             if (cursor == null || cursor.getType() == Material.AIR) {
                 canOnCursor = maxStack;
             } else if (cursor.isSimilar(base)) {
@@ -142,8 +144,6 @@ public class WorkbenchListener implements Listener {
             }
             int putOnCursor = Math.min(totalItems, canOnCursor);
             if (putOnCursor > 0) {
-                ItemStack nc = base.clone();
-                nc.setAmount((cursor == null || cursor.getType() == Material.AIR) ? putOnCursor : cursor.getAmount() + putOnCursor);
                 if (cursor == null || cursor.getType() == Material.AIR) {
                     ItemStack toSet = base.clone();
                     toSet.setAmount(putOnCursor);
@@ -184,6 +184,13 @@ public class WorkbenchListener implements Listener {
         inv.setMatrix(newMatrix);
         inv.setResult(null);
         p.updateInventory();
+    }
+
+    private List<ItemStack> getRequirementsCached(ShapelessRecipe sr) {
+        NamespacedKey k = sr.getKey();
+        if (k == null) return extractRequirements(sr);
+        if (reqCache.size() > 1024) reqCache.clear();
+        return reqCache.computeIfAbsent(k, kk -> extractRequirements(sr));
     }
 
     private List<ItemStack> extractRequirements(ShapelessRecipe sr) {

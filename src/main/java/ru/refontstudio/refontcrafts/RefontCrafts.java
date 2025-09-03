@@ -37,6 +37,8 @@ public final class RefontCrafts extends JavaPlugin {
         for (Handler h : getLogger().getHandlers()) getLogger().removeHandler(h);
         getLogger().addHandler(new ChatLogger());
 
+        verifyJdbcDrivers();
+
         database = new Database(this);
         storage = new RecipeStorage(this, database);
 
@@ -62,6 +64,29 @@ public final class RefontCrafts extends JavaPlugin {
             storage.shutdown();
             storage.unregisterAllShapeless();
         }
+    }
+
+    private void verifyJdbcDrivers() {
+        String type = getConfig().getString("database.type", "sqlite").toLowerCase();
+        if (type.equals("sqlite")) {
+            if (!classPresent("org.sqlite.JDBC")) {
+                getLogger().warning("SQLite driver not found. On Paper, add libraries in plugin.yml or set database.type=mysql.");
+            } else {
+                getLogger().info("SQLite driver detected.");
+            }
+        } else {
+            boolean mysql = classPresent("com.mysql.cj.jdbc.Driver");
+            boolean mariadb = classPresent("org.mariadb.jdbc.Driver");
+            if (!mysql && !mariadb) {
+                getLogger().warning("MySQL/MariaDB driver not found. On Paper, add libraries in plugin.yml: mysql:mysql-connector-java:8.0.33");
+            } else {
+                getLogger().info((mysql ? "MySQL" : "MariaDB") + " driver detected.");
+            }
+        }
+    }
+
+    private boolean classPresent(String cn) {
+        try { Class.forName(cn); return true; } catch (Throwable t) { return false; }
     }
 
     public String prefix() {
