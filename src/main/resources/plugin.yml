@@ -1,5 +1,5 @@
 name: RefontCrafts
-version: '1.0.2'
+version: '1.0.3'
 main: ru.refontstudio.refontcrafts.RefontCrafts
 api-version: '1.16'
 libraries:
