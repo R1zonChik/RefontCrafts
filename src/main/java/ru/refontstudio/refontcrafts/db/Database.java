@@ -6,6 +6,7 @@ import ru.refontstudio.refontcrafts.RefontCrafts;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.Statement;
 
 public class Database {
@@ -96,23 +97,75 @@ public class Database {
         try (Connection cn = getConnection(); Statement st = cn.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS shapeless_recipes (" +
                     "id VARCHAR(64) PRIMARY KEY," +
-                    "result VARCHAR(64) NOT NULL," +
+                    "result TEXT NOT NULL," +
                     "created_at BIGINT NOT NULL" +
                     ")");
             st.executeUpdate("CREATE TABLE IF NOT EXISTS shapeless_ingredients (" +
                     "recipe_id VARCHAR(64) NOT NULL," +
                     "ord INT NOT NULL," +
-                    "item VARCHAR(64) NOT NULL," +
+                    "item TEXT NOT NULL," +
                     "PRIMARY KEY (recipe_id, ord)" +
                     ")");
             st.executeUpdate("CREATE TABLE IF NOT EXISTS anvil_recipes (" +
                     "id VARCHAR(64) PRIMARY KEY," +
-                    "left_item VARCHAR(64) NOT NULL," +
-                    "right_item VARCHAR(64) NOT NULL," +
-                    "result VARCHAR(64) NOT NULL," +
+                    "left_item TEXT NOT NULL," +
+                    "right_item TEXT NOT NULL," +
+                    "result TEXT NOT NULL," +
                     "cost INT NOT NULL," +
                     "created_at BIGINT NOT NULL" +
                     ")");
         } catch (Throwable ignored) {}
+
+        try { upgradeSchemaIfNeeded(); } catch (Throwable ignored) {}
+    }
+
+    private void upgradeSchemaIfNeeded() throws Exception {
+        if ("mysql".equalsIgnoreCase(activeType)) {
+            try (Connection cn = getConnection(); Statement st = cn.createStatement()) {
+                try { st.executeUpdate("ALTER TABLE shapeless_recipes MODIFY result TEXT NOT NULL"); } catch (Throwable ignored) {}
+                try { st.executeUpdate("ALTER TABLE shapeless_ingredients MODIFY item TEXT NOT NULL"); } catch (Throwable ignored) {}
+                try { st.executeUpdate("ALTER TABLE anvil_recipes MODIFY left_item TEXT NOT NULL, MODIFY right_item TEXT NOT NULL, MODIFY result TEXT NOT NULL"); } catch (Throwable ignored) {}
+            }
+            return;
+        }
+
+        try (Connection cn = getConnection(); Statement st = cn.createStatement()) {
+            if (sqliteNeedsRebuild(cn, "shapeless_recipes", "result")) {
+                st.executeUpdate("ALTER TABLE shapeless_recipes RENAME TO shapeless_recipes_v1");
+                st.executeUpdate("CREATE TABLE shapeless_recipes (id VARCHAR(64) PRIMARY KEY, result TEXT NOT NULL, created_at BIGINT NOT NULL)");
+                st.executeUpdate("INSERT INTO shapeless_recipes (id,result,created_at) SELECT id,result,created_at FROM shapeless_recipes_v1");
+                st.executeUpdate("DROP TABLE shapeless_recipes_v1");
+            }
+            if (sqliteNeedsRebuild(cn, "shapeless_ingredients", "item")) {
+                st.executeUpdate("ALTER TABLE shapeless_ingredients RENAME TO shapeless_ingredients_v1");
+                st.executeUpdate("CREATE TABLE shapeless_ingredients (recipe_id VARCHAR(64) NOT NULL, ord INT NOT NULL, item TEXT NOT NULL, PRIMARY KEY (recipe_id, ord))");
+                st.executeUpdate("INSERT INTO shapeless_ingredients (recipe_id,ord,item) SELECT recipe_id,ord,item FROM shapeless_ingredients_v1");
+                st.executeUpdate("DROP TABLE shapeless_ingredients_v1");
+            }
+            boolean needAnvil = sqliteNeedsRebuild(cn, "anvil_recipes", "left_item")
+                    || sqliteNeedsRebuild(cn, "anvil_recipes", "right_item")
+                    || sqliteNeedsRebuild(cn, "anvil_recipes", "result");
+            if (needAnvil) {
+                st.executeUpdate("ALTER TABLE anvil_recipes RENAME TO anvil_recipes_v1");
+                st.executeUpdate("CREATE TABLE anvil_recipes (id VARCHAR(64) PRIMARY KEY, left_item TEXT NOT NULL, right_item TEXT NOT NULL, result TEXT NOT NULL, cost INT NOT NULL, created_at BIGINT NOT NULL)");
+                st.executeUpdate("INSERT INTO anvil_recipes (id,left_item,right_item,result,cost,created_at) SELECT id,left_item,right_item,result,cost,created_at FROM anvil_recipes_v1");
+                st.executeUpdate("DROP TABLE anvil_recipes_v1");
+            }
+        }
+    }
+
+    private boolean sqliteNeedsRebuild(Connection cn, String table, String column) {
+        try (Statement st = cn.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info('" + table + "')")) {
+            while (rs.next()) {
+                String name = rs.getString("name");
+                String type = rs.getString("type");
+                if (name != null && name.equalsIgnoreCase(column)) {
+                    if (type == null) return true;
+                    return !type.equalsIgnoreCase("TEXT");
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
     }
 }

@@ -17,11 +17,13 @@ import ru.refontstudio.refontcrafts.util.Text;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class AnvilEditorMenu implements Listener {
     private final RefontCrafts plugin;
     private final RecipeStorage storage;
     private final Map<Player, Integer> costs = new HashMap<>();
+    private final Map<UUID, String> editId = new HashMap<>();
 
     private static final int LEFT = 10;
     private static final int RIGHT = 12;
@@ -44,13 +46,31 @@ public class AnvilEditorMenu implements Listener {
         inv.setItem(LEFT, null);
         inv.setItem(RIGHT, null);
         inv.setItem(OUT, null);
-        inv.setItem(MINUS, ItemUtil.named(Material.REDSTONE, "&c- Стоимость", "&7Уменьшить стоимость на 1"));
-        inv.setItem(PLUS, ItemUtil.named(Material.EMERALD, "&a+ Стоимость", "&7Увеличить стоимость на 1"));
+        inv.setItem(MINUS, ItemUtil.named(Material.REDSTONE, "&c- Стоимость", "&7Уменьшить на 1"));
+        inv.setItem(PLUS, ItemUtil.named(Material.EMERALD, "&a+ Стоимость", "&7Увеличить на 1"));
         inv.setItem(COST, ItemUtil.named(Material.EXPERIENCE_BOTTLE, "&eСтоимость: &f" + plugin.defaultAnvilCost(), "&7Уровни при крафте"));
         inv.setItem(SAVE, ItemUtil.named(Material.LIME_WOOL, "&aСохранить", "&7Сохранить рецепт наковальни"));
         inv.setItem(CLEAR, ItemUtil.named(Material.YELLOW_WOOL, "&eОчистить", "&7Убрать все предметы"));
         inv.setItem(EXIT, ItemUtil.named(Material.BARRIER, "&cВыход", "&7Вернуть вещи и закрыть"));
         costs.put(p, plugin.defaultAnvilCost());
+        editId.remove(p.getUniqueId());
+        p.openInventory(inv);
+    }
+
+    public void openEditorForEdit(Player p, ItemStack left, ItemStack right, ItemStack out, int cost, String id) {
+        Inventory inv = Bukkit.createInventory(p, 54, plugin.titleAnvil());
+        for (int i = 0; i < inv.getSize(); i++) inv.setItem(i, ItemUtil.named(Material.GRAY_STAINED_GLASS_PANE, " "));
+        inv.setItem(LEFT, left == null ? null : left.clone());
+        inv.setItem(RIGHT, right == null ? null : right.clone());
+        inv.setItem(OUT, out == null ? null : out.clone());
+        inv.setItem(MINUS, ItemUtil.named(Material.REDSTONE, "&c- Стоимость", "&7Уменьшить на 1"));
+        inv.setItem(PLUS, ItemUtil.named(Material.EMERALD, "&a+ Стоимость", "&7Увеличить на 1"));
+        inv.setItem(COST, ItemUtil.named(Material.EXPERIENCE_BOTTLE, "&eСтоимость: &f" + cost, "&7Уровни при крафте"));
+        inv.setItem(SAVE, ItemUtil.named(Material.LIME_WOOL, "&aСохранить", "&7Пересохранить рецепт"));
+        inv.setItem(CLEAR, ItemUtil.named(Material.YELLOW_WOOL, "&eОчистить", "&7Убрать все предметы"));
+        inv.setItem(EXIT, ItemUtil.named(Material.BARRIER, "&cВыход", "&7Вернуть вещи и закрыть"));
+        costs.put(p, cost);
+        editId.put(p.getUniqueId(), id);
         p.openInventory(inv);
     }
 
@@ -82,22 +102,21 @@ public class AnvilEditorMenu implements Listener {
             ItemStack left = top.getItem(LEFT);
             ItemStack right = top.getItem(RIGHT);
             ItemStack out = top.getItem(OUT);
-            if (left == null || right == null || out == null
-                    || left.getType() == Material.AIR || right.getType() == Material.AIR || out.getType() == Material.AIR) {
+            if (left == null || right == null || out == null || left.getType() == Material.AIR || right.getType() == Material.AIR || out.getType() == Material.AIR) {
                 p.sendMessage(Text.color(plugin.prefix() + plugin.msg("anvil_fill_both")));
                 return;
             }
             int cost = costs.getOrDefault(p, plugin.defaultAnvilCost());
+            String old = editId.remove(p.getUniqueId());
+            if (old != null) storage.deleteAnvilRecipe(old);
             String id = storage.saveAnvilRecipe(left.clone(), right.clone(), out.clone(), cost);
             p.sendMessage(Text.color(plugin.prefix() + plugin.msg("saved_anvil", "id", id, "cost", String.valueOf(cost))));
-
             dropBack(p, left);
             dropBack(p, right);
             dropBack(p, out);
             top.setItem(LEFT, null);
             top.setItem(RIGHT, null);
             top.setItem(OUT, null);
-
             openEditor(p);
             return;
         }
@@ -126,11 +145,11 @@ public class AnvilEditorMenu implements Listener {
     @EventHandler
     public void close(InventoryCloseEvent e) {
         if (!isEditorTitle(e.getView().getTitle())) return;
-        if (!plugin.takeBackOnClose()) return;
         dropBack(e.getPlayer(), e.getInventory().getItem(LEFT));
         dropBack(e.getPlayer(), e.getInventory().getItem(RIGHT));
         dropBack(e.getPlayer(), e.getInventory().getItem(OUT));
         costs.remove((Player) e.getPlayer());
+        editId.remove(e.getPlayer().getUniqueId());
     }
 
     private void dropBack(HumanEntity p, ItemStack it) {
