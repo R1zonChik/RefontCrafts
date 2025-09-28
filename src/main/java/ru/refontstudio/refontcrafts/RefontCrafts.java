@@ -7,6 +7,7 @@ import ru.refontstudio.refontcrafts.db.Database;
 import ru.refontstudio.refontcrafts.gui.AnvilEditorMenu;
 import ru.refontstudio.refontcrafts.gui.RecipeBrowserMenu;
 import ru.refontstudio.refontcrafts.gui.RecipeEditorMenu;
+import ru.refontstudio.refontcrafts.listeners.AnvilClickListener;
 import ru.refontstudio.refontcrafts.listeners.AnvilListener;
 import ru.refontstudio.refontcrafts.listeners.WorkbenchListener;
 import ru.refontstudio.refontcrafts.storage.RecipeStorage;
@@ -23,6 +24,7 @@ public final class RefontCrafts extends JavaPlugin {
     private RecipeEditorMenu recipeMenu;
     private AnvilEditorMenu anvilMenu;
     private RecipeBrowserMenu browserMenu;
+    private boolean clickAnvilMode;
 
     public static RefontCrafts getInstance() { return instance; }
     public Database database() { return database; }
@@ -30,11 +32,14 @@ public final class RefontCrafts extends JavaPlugin {
     public RecipeEditorMenu recipeMenu() { return recipeMenu; }
     public AnvilEditorMenu anvilMenu() { return anvilMenu; }
     public RecipeBrowserMenu browserMenu() { return browserMenu; }
+    public boolean clickAnvilMode() { return clickAnvilMode; }
 
     @Override
     public void onEnable() {
         instance = this;
         saveDefaultConfig();
+        new ru.refontstudio.refontcrafts.util.ConfigUpdater(this).writePretty();
+        reloadConfig();
         getLogger().setUseParentHandlers(false);
         for (Handler h : getLogger().getHandlers()) getLogger().removeHandler(h);
         getLogger().addHandler(new ChatLogger());
@@ -43,10 +48,17 @@ public final class RefontCrafts extends JavaPlugin {
         recipeMenu = new RecipeEditorMenu(this, storage);
         anvilMenu = new AnvilEditorMenu(this, storage);
         browserMenu = new RecipeBrowserMenu(this, storage);
+        String mode = getConfig().getString("settings.anvil_mode", "auto").toLowerCase();
+        boolean aePresent = Bukkit.getPluginManager().getPlugin("AdvancedEnchantments") != null;
+        clickAnvilMode = mode.equals("click") || (mode.equals("auto") && aePresent);
         Bukkit.getPluginManager().registerEvents(recipeMenu, this);
         Bukkit.getPluginManager().registerEvents(anvilMenu, this);
         Bukkit.getPluginManager().registerEvents(browserMenu, this);
-        Bukkit.getPluginManager().registerEvents(new AnvilListener(this, storage), this);
+        if (clickAnvilMode) {
+            Bukkit.getPluginManager().registerEvents(new AnvilClickListener(this, storage), this);
+        } else {
+            Bukkit.getPluginManager().registerEvents(new AnvilListener(this, storage), this);
+        }
         Bukkit.getPluginManager().registerEvents(new WorkbenchListener(this), this);
         RefontCraftsCommand cmd = new RefontCraftsCommand(this);
         if (getCommand("rcrafts") != null) {

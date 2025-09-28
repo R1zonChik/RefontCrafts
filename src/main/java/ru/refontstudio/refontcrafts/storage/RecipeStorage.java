@@ -5,6 +5,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
@@ -17,6 +18,7 @@ import ru.refontstudio.refontcrafts.util.ItemCodec;
 import ru.refontstudio.refontcrafts.util.ItemUtil;
 import ru.refontstudio.refontcrafts.util.ChatLog;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -155,11 +157,13 @@ public class RecipeStorage {
     public void autoMigrateIfDbTypeChanged() {
         FileConfiguration conf = plugin.getConfig();
         String curr = db.getActiveType();
-        String prev = conf.getString("database.last_type", null);
+
+        YamlConfiguration state = loadState();
+        String prev = state.getString("database.last_type", conf.getString("database.last_type", null));
 
         if (prev == null || prev.isEmpty()) {
-            conf.set("database.last_type", curr);
-            plugin.saveConfig();
+            state.set("database.last_type", curr);
+            saveState(state);
             return;
         }
         if (prev.equalsIgnoreCase(curr)) return;
@@ -173,8 +177,8 @@ public class RecipeStorage {
                 runSync(() -> ChatLog.send(plugin.prefix() + "&cMigration error from &f" + prev + " &cto &f" + curr + "&c: &f" + t.getMessage()));
             }
         }
-        conf.set("database.last_type", curr);
-        plugin.saveConfig();
+        state.set("database.last_type", curr);
+        saveState(state);
     }
 
     private boolean isDbEmpty(Database target) {
@@ -615,6 +619,19 @@ public class RecipeStorage {
     private void runSync(Runnable r) {
         if (!alive()) return;
         try { plugin.getServer().getScheduler().runTask(plugin, r); } catch (IllegalPluginAccessException ignored) {}
+    }
+
+    private File stateFile() {
+        return new File(plugin.getDataFolder(), "state.yml");
+    }
+
+    private YamlConfiguration loadState() {
+        File f = stateFile();
+        return YamlConfiguration.loadConfiguration(f);
+    }
+
+    private void saveState(YamlConfiguration s) {
+        try { s.save(stateFile()); } catch (Throwable ignored) {}
     }
 
     private static class LoadedWorkbench {

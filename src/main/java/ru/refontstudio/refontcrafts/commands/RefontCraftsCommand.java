@@ -1,21 +1,37 @@
 package ru.refontstudio.refontcrafts.commands;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import ru.refontstudio.refontcrafts.RefontCrafts;
+import ru.refontstudio.refontcrafts.util.ItemUtil;
+import ru.refontstudio.refontcrafts.util.Text;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
+public class RefontCraftsCommand implements CommandExecutor, TabCompleter, Listener {
     private final RefontCrafts plugin;
+    private final NamespacedKey MAIN_KEY;
+    private final String MAIN_TITLE = Text.color("§bВыбор раздела");
 
     public RefontCraftsCommand(RefontCrafts plugin) {
         this.plugin = plugin;
+        this.MAIN_KEY = new NamespacedKey(plugin, "rc_main_menu");
+        Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     @Override
@@ -26,7 +42,7 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
         }
         Player p = (Player) s;
         if (args.length == 0) {
-            plugin.browserMenu().openWorkbench(p, 1);
+            openMainMenu(p);
             return true;
         }
         String sub = args[0].toLowerCase();
@@ -55,7 +71,7 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
             p.sendMessage(plugin.msg("reloaded"));
             return true;
         }
-        plugin.browserMenu().openWorkbench(p, 1);
+        openMainMenu(p);
         return true;
     }
 
@@ -64,5 +80,52 @@ public class RefontCraftsCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) return Arrays.asList("view","browse","list","recipe","anvil","reload");
         if (args.length == 2 && (args[0].equalsIgnoreCase("view") || args[0].equalsIgnoreCase("browse") || args[0].equalsIgnoreCase("list"))) return Arrays.asList("workbench","anvil");
         return new ArrayList<>();
+    }
+
+    private void openMainMenu(Player p) {
+        Inventory inv = Bukkit.createInventory(p, 27, MAIN_TITLE);
+        for (int i = 0; i < inv.getSize(); i++) inv.setItem(i, ItemUtil.named(Material.GRAY_STAINED_GLASS_PANE, " "));
+        ItemStack wb = ItemUtil.named(Material.CRAFTING_TABLE, Text.color("§bВерстак"), Text.color("&7Открыть рецепты верстака"));
+        ItemMeta wbm = wb.getItemMeta();
+        wbm.getPersistentDataContainer().set(MAIN_KEY, PersistentDataType.STRING, "wb");
+        wb.setItemMeta(wbm);
+        ItemStack anv = ItemUtil.named(Material.ANVIL, Text.color("§dНаковальня"), Text.color("&7Открыть рецепты наковальни"));
+        ItemMeta anm = anv.getItemMeta();
+        anm.getPersistentDataContainer().set(MAIN_KEY, PersistentDataType.STRING, "anv");
+        anv.setItemMeta(anm);
+        ItemStack close = ItemUtil.named(Material.BARRIER, Text.color("&cЗакрыть"));
+        ItemMeta clm = close.getItemMeta();
+        clm.getPersistentDataContainer().set(MAIN_KEY, PersistentDataType.STRING, "close");
+        close.setItemMeta(clm);
+        inv.setItem(11, wb);
+        inv.setItem(13, close);
+        inv.setItem(15, anv);
+        p.openInventory(inv);
+    }
+
+    @EventHandler
+    public void onMainClick(InventoryClickEvent e) {
+        if (!(e.getWhoClicked() instanceof Player)) return;
+        if (!Text.plain(e.getView().getTitle()).equals(Text.plain(MAIN_TITLE))) return;
+        if (e.getRawSlot() >= e.getView().getTopInventory().getSize()) return;
+        e.setCancelled(true);
+        ItemStack it = e.getCurrentItem();
+        if (it == null || it.getType() == Material.AIR) return;
+        ItemMeta im = it.getItemMeta();
+        if (im == null) return;
+        String act = im.getPersistentDataContainer().get(MAIN_KEY, PersistentDataType.STRING);
+        if (act == null) return;
+        Player p = (Player) e.getWhoClicked();
+        if (act.equals("wb")) {
+            plugin.browserMenu().openWorkbench(p, 1);
+            return;
+        }
+        if (act.equals("anv")) {
+            plugin.browserMenu().openAnvil(p, 1);
+            return;
+        }
+        if (act.equals("close")) {
+            p.closeInventory();
+        }
     }
 }

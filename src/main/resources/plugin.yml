@@ -1,7 +1,9 @@
 name: RefontCrafts
-version: '1.0.3'
+version: '1.0.4'
 main: ru.refontstudio.refontcrafts.RefontCrafts
 api-version: '1.16'
+softdepend:
+  - AdvancedEnchantments
 libraries:
   - org.xerial:sqlite-jdbc:3.45.3.0
   - mysql:mysql-connector-java:8.0.33
